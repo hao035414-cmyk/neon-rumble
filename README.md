@@ -1,21 +1,23 @@
 # NEON RUMBLE
 
-**A dependency-free 2D fighting game that runs in the browser.** Jab, kick, anti-air, block low, and land a super in a neon city â€” no engine, no build step, no image assets.
+**A dependency-free 2D fighting game that runs in the browser.** Jab, kick, anti-air, block low, and land a super in a neon city — no engine, no build step, no image assets.
 
-[**â–¶ Play it**](https://hao035414-cmyk.github.io/neon-rumble/) Â· [Report a bug](https://github.com/hao035414-cmyk/neon-rumble/issues)
+[**▶ Play it**](https://hao035414-cmyk.github.io/neon-rumble/) · [Report a bug](https://github.com/hao035414-cmyk/neon-rumble/issues)
+
+[![test](https://github.com/hao035414-cmyk/neon-rumble/actions/workflows/test.yml/badge.svg)](https://github.com/hao035414-cmyk/neon-rumble/actions/workflows/test.yml)
 
 ![NEON RUMBLE](docs/fight.png)
 
 ## Features
 
-- **Classic 1v1 fighting rules** â€” best of 3 rounds, 99-second timer, KO and time-over.
-- **Six normals** â€” jab, heavy, kick, crouching low, jump-in, plus a projectile special and a 100-meter super.
-- **Real fighting-game logic** â€” startup/active/recovery frames, hitstun, blockstun, knockdowns, invulnerable wake-up, pushback, combo scaling.
-- **Correct blocking rules** â€” lows must be crouch-blocked, jump-ins are overheads, projectiles chip.
-- **Motion inputs** â€” quarter-circle forward for the special, double quarter-circle for the super.
-- **A readable CPU** â€” approaches, pokes, anti-airs, blocks and throws fireballs.
+- **Classic 1v1 fighting rules** — best of 3 rounds, 99-second timer, KO and time-over.
+- **Six normals** — jab, heavy, kick, crouching low, jump-in, plus a projectile special and a 100-meter super.
+- **Real fighting-game logic** — startup/active/recovery frames, hitstun, blockstun, knockdowns, invulnerable wake-up, pushback, combo scaling.
+- **Correct blocking rules** — lows must be crouch-blocked, jump-ins are overheads, projectiles chip.
+- **Motion inputs** — quarter-circle forward for the special, double quarter-circle for the super.
+- **A readable CPU** — approaches, pokes, anti-airs, blocks and throws fireballs.
 - **Local 2P** on one keyboard.
-- **Zero dependencies** â€” plain ES modules + Canvas 2D. The simulation is DOM-free and unit-tested under Node.
+- **Zero dependencies** — plain ES modules + Canvas 2D. The simulation is DOM-free and unit-tested under Node.
 
 ## Play
 
@@ -34,16 +36,16 @@ Any static file server works; there is nothing to install or compile.
 
 | Action | Player 1 | Player 2 |
 | --- | --- | --- |
-| Move | `A` / `D` | `â†` / `â†’` |
-| Jump | `W` | `â†‘` |
-| Crouch | `S` | `â†“` |
+| Move | `A` / `D` | `←` / `→` |
+| Jump | `W` | `↑` |
+| Crouch | `S` | `↓` |
 | Jab (light) | `J` | `1` (numpad) |
 | Heavy | `K` | `2` (numpad) |
 | Kick | `L` | `3` (numpad) |
-| Special | `â†“ â†˜ â†’` + attack | `â†“ â†™ â†` + attack |
-| Super (100 meter) | `â†“ â†˜ â†’ â†“ â†˜ â†’` + heavy | `â†“ â†™ â† â†“ â†™ â†` + heavy |
+| Special | `↓ ↘ →` + attack | `↓ ↙ ←` + attack |
+| Super (100 meter) | `↓ ↘ → ↓ ↘ →` + heavy | `↓ ↙ ← ↓ ↙ ←` + heavy |
 
-`Esc` pause Â· `R` restart Â· `M` mute.
+`Esc` pause · `R` restart · `M` mute.
 
 ### Rules
 
@@ -83,26 +85,26 @@ The test suite runs a full CPU-vs-CPU match, then checks strikes, blocking, proj
 
 ## License
 
-MIT â€” see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
 
 This is an original fan-made project. It is not affiliated with, endorsed by, or containing assets from SNK, Capcom, or any commercial fighting game.
 
 ---
 
 <details>
-<summary>ä¸­æ–‡è¯´æ˜Ž</summary>
+<summary>中文说明</summary>
 
-**NEON RUMBLE æ˜¯ä¸€ä¸ªé›¶ä¾èµ–çš„æµè§ˆå™¨ 2D æ ¼æ–—æ¸¸æˆã€‚**
+**NEON RUMBLE 是一个零依赖的浏览器 2D 格斗游戏。**
 
-- ä¸‰å±€ä¸¤èƒœã€99 ç§’è¯»ç§’ã€KO ä¸Žæ—¶é—´åˆ°åˆ¤å®š
-- è½»æ‹³ / é‡æ‹³ / è¸¢ / ä¸‹æ®µ / è·³è·ƒæ”»å‡» / æ³¢åŠ¨ / 100 æ°”è¶…å¿…æ€
-- èµ·æ‰‹å¸§ã€å‘½ä¸­ç¡¬ç›´ã€é˜²å¾¡ç¡¬ç›´ã€å‡»å€’ã€èµ·èº«æ— æ•Œã€è¿žæ®µé€’å‡
-- ä¸‹æ®µå¿…é¡»è¹²é˜²ï¼Œè·³è·ƒæ”»å‡»æ˜¯ overheadï¼Œæ³¢åŠ¨æœ‰å‰Šè¡€
-- æ‹›å¼æŒ‡ä»¤ï¼šä¸‹å‰ä¸‹å‰ + æ”»å‡»
-- å•äºº CPU ä¸Žæœ¬åœ°åŒäºº
+- 三局两胜、99 秒读秒、KO 与时间到判定
+- 轻拳 / 重拳 / 踢 / 下段 / 跳跃攻击 / 波动 / 100 气超必杀
+- 起手帧、命中硬直、防御硬直、击倒、起身无敌、连段递减
+- 下段必须蹲防，跳跃攻击是 overhead，波动有削血
+- 招式指令：下前下前 + 攻击
+- 单人 CPU 与本地双人
 
-**è¿è¡Œ**ï¼šä»»æ„é™æ€æœåŠ¡å™¨å³å¯ï¼Œæˆ–ç›´æŽ¥æ‰“å¼€çº¿ä¸Šç‰ˆã€‚
+**运行**：任意静态服务器即可，或直接打开线上版。
 
-**æµ‹è¯•**ï¼š`npm test` åœ¨ Node ä¸‹è·‘å®Œæ•´å¯¹å±€ä¸Žæˆ˜æ–—è§„åˆ™æ–­è¨€ã€‚
+**测试**：`npm test` 在 Node 下跑完整对局与战斗规则断言。
 
 </details>
