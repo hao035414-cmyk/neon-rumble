@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NEON RUMBLE — a 2D fighting game</title>
+    <meta
+      name="description"
+      content="NEON RUMBLE is a dependency-free 2D fighting game built with HTML5 Canvas. Jab, kick, block, anti-air and land supers in a neon city."
+    />
+    <meta name="theme-color" content="#070417" />
+    <link rel="stylesheet" href="./style.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23070417'/%3E%3Cpath d='M20 44 L32 16 L44 44' stroke='%23ff4fa3' stroke-width='6' fill='none' stroke-linecap='round'/%3E%3Cpath d='M24 36 H40' stroke='%2338e8ff' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <main class="stage">
+      <canvas id="game" width="960" height="540" aria-label="NEON RUMBLE fighting game"></canvas>
+      <p class="hint">
+        <strong>P1</strong> A/D move · W jump · S crouch · J jab · K heavy · L kick ·
+        <strong>P2</strong> arrows + numpad 1/2/3 · <kbd>Esc</kbd> pause · <kbd>R</kbd> restart ·
+        <kbd>M</kbd> mute
+      </p>
+      <p class="meta">
+        open source · MIT ·
+        <a href="https://github.com/hao035414-cmyk/neon-rumble">github.com/hao035414-cmyk/neon-rumble</a>
+      </p>
+    </main>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
