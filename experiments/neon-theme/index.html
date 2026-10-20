@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NEON RUMBLE — Neon City Theme (BGM prototype)</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0; min-height: 100vh; display: grid; place-items: center;
+      background: radial-gradient(circle at 50% 30%, #1b0b34 0%, #07040f 60%, #030208 100%);
+      color: #e8e2ff; font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    .card {
+      width: min(720px, 92vw); padding: 28px 32px 32px; border-radius: 18px;
+      background: rgba(12, 6, 26, 0.86); border: 1px solid rgba(255, 79, 163, 0.35);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.6), inset 0 0 60px rgba(120, 60, 255, 0.08);
+    }
+    h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: 3px; color: #ff4fa3; text-shadow: 0 0 18px rgba(255,79,163,0.6); }
+    .sub { margin: 0 0 22px; color: #9d93c7; font-size: 13px; letter-spacing: 1px; }
+    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    button {
+      font: inherit; padding: 10px 22px; border-radius: 10px; cursor: pointer;
+      border: 1px solid rgba(56,232,255,0.5); background: linear-gradient(180deg, #14243a, #0a1220);
+      color: #9ff4ff; letter-spacing: 1px;
+    }
+    button:hover { border-color: #9ff4ff; box-shadow: 0 0 18px rgba(56,232,255,0.35); }
+    button:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
+    .time { margin-left: auto; font-variant-numeric: tabular-nums; color: #9d93c7; }
+    canvas { width: 100%; height: 120px; margin-top: 20px; border-radius: 10px; background: rgba(255,255,255,0.03); }
+    input[type=range] { width: 160px; accent-color: #ff4fa3; }
+    .meta { margin-top: 14px; color: #6f679c; font-size: 12px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>NEON CITY THEME</h1>
+    <p class="sub">BGM prototype · 124 BPM · A minor · 30 s · v2 (pumping + riser)</p>
+    <div class="row">
+      <button id="play">▶ 播放 30 秒</button>
+      <button id="stop" disabled>■ 停止</button>
+      <label class="time"><input id="vol" type="range" min="0" max="100" value="70" /> 音量</label>
+      <span class="time" id="clock">00.0 / 30.0</span>
+    </div>
+    <canvas id="viz" width="720" height="120"></canvas>
+    <p class="meta">
+      四拍鼓 + 侧链泵动 + 16 分方波琶音 + 八度贝斯 + 锯齿铺底 + 上升噪声 + 城市环境声。第一次点击后才会出声（浏览器自动播放限制）。
+      这是 v2.0 的 BGM 试听样曲，不是最终游戏内混音。
+    </p>
+  </main>
+  <script>
+    window.addEventListener('error', function (event) {
+      document.body.dataset.error = String(event.message || event.error);
+    });
+  </script>
+  <script type="module" src="./theme.js"></script>
+</body>
+</html>

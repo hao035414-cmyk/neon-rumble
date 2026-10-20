@@ -4,11 +4,12 @@
  */
 
 import { MOVES, VIEW, WORLD } from './config.js';
+import { STAGE_BY_ID } from './stages.js';
 
 const { width: VW, height: VH } = VIEW;
 
 export function renderScene(ctx, engine, ui) {
-  drawBackground(ctx, engine.cameraX, engine.frame);
+  drawBackground(ctx, engine.cameraX, engine.frame, STAGE_BY_ID[engine.stageId] ?? STAGE_BY_ID.neon_city);
   ctx.save();
   const shakeX = engine.shake > 0.4 ? (Math.random() - 0.5) * engine.shake : 0;
   const shakeY = engine.shake > 0.4 ? (Math.random() - 0.5) * engine.shake : 0;
@@ -46,7 +47,15 @@ export function renderScene(ctx, engine, ui) {
 /* Stage                                                               */
 /* ------------------------------------------------------------------ */
 
-function drawBackground(ctx, cameraX, t) {
+function drawBackground(ctx, cameraX, t, stage = STAGE_BY_ID.neon_city) {
+  if (stage.kind === 'desert') return drawDesert(ctx, cameraX, t, stage);
+  if (stage.kind === 'snow') return drawSnow(ctx, cameraX, t, stage);
+  if (stage.kind === 'grass') return drawGrassland(ctx, cameraX, t, stage);
+  if (stage.kind === 'rain') return drawRain(ctx, cameraX, t, stage);
+  return drawNeonCity(ctx, cameraX, t);
+}
+
+function drawNeonCity(ctx, cameraX, t) {
   const sky = ctx.createLinearGradient(0, 0, 0, VH);
   sky.addColorStop(0, '#070417');
   sky.addColorStop(0.42, '#241040');
@@ -245,6 +254,16 @@ function drawFighter(ctx, f, engine) {
     leadArm.x = 14 - walk * 6;
     rearArm.x = -14 + walk * 6;
   }
+  if (f.state === 'dash') {
+    rearFoot.x = -28;
+    leadFoot.x = 32;
+    rearArm.x = -22;
+  }
+  if (f.state === 'backdash') {
+    rearFoot.x = -24;
+    leadFoot.x = 26;
+    leadArm.x = 6;
+  }
   if (f.airborne) {
     rearFoot.y = -26;
     leadFoot.y = -34;
@@ -285,11 +304,32 @@ function drawFighter(ctx, f, engine) {
       leadFoot.y = -30;
       leadArm.x = 24;
       leadArm.y = shoulderY + 6;
-    } else if (f.move === 'special' || f.move === 'super') {
+    } else if (f.move === 'special' || f.move === 'specialEX' || f.move === 'super') {
       leadArm.x = 26 + 16 * ext;
       leadArm.y = shoulderY + 24;
       rearArm.x = 10;
       rearArm.y = shoulderY + 26;
+    } else if (f.move === 'overhead') {
+      leadFoot.x = 14 + 62 * ext;
+      leadFoot.y = shoulderY + 26 - 12 * ext;
+      rearFoot.x = -20;
+    } else if (f.move === 'launch') {
+      leadArm.x = 8 + 10 * ext;
+      leadArm.y = shoulderY - 46 * ext;
+      rearArm.x = -8;
+      rearArm.y = shoulderY + 20;
+    } else if (f.move === 'dp') {
+      leadArm.x = 10;
+      leadArm.y = shoulderY - 64 * ext;
+      rearArm.x = -6;
+      rearArm.y = shoulderY - 30 * ext;
+      leadFoot.x = 18;
+      leadFoot.y = -18 * ext;
+    } else if (f.move === 'throw') {
+      leadArm.x = 30 + 12 * ext;
+      leadArm.y = shoulderY + 16;
+      rearArm.x = 24 + 10 * ext;
+      rearArm.y = shoulderY + 22;
     }
   }
 
@@ -616,7 +656,8 @@ function drawAnnouncements(ctx, engine) {
   } else if (phase === 'matchOver') {
     ctx.fillStyle = 'rgba(4,2,10,0.62)';
     ctx.fillRect(0, 0, VW, VH);
-    bigText(ctx, `${engine.matchWinner?.char.name ?? 'NOBODY'} WINS`, 220, 62, '#ffd166');
+    const result = engine.matchWinner ? `${engine.matchWinner.char.name} WINS` : 'DRAW';
+    bigText(ctx, result, 220, 62, '#ffd166');
     bigText(ctx, 'PRESS ENTER TO PLAY AGAIN', 286, 18, '#ffffff', 0.85 + Math.sin(engine.frame * 0.08) * 0.15);
   }
 }
@@ -739,3 +780,212 @@ export function drawLoading(ctx) {
   ctx.font = '16px "Segoe UI", system-ui, sans-serif';
   ctx.fillText('loading…', VW / 2, VH / 2);
 }
+
+/* ------------------------------------------------------------------ */
+/* Extra stages                                                        */
+/* ------------------------------------------------------------------ */
+
+function stageSky(ctx, stage) {
+  const sky = ctx.createLinearGradient(0, 0, 0, VH);
+  sky.addColorStop(0, stage.palette.skyTop);
+  sky.addColorStop(0.7, stage.palette.skyBottom);
+  sky.addColorStop(1, stage.palette.ground);
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, VW, VH);
+}
+
+function stageSun(ctx, stage, x, y, r) {
+  ctx.save();
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = stage.palette.sun;
+  ctx.shadowColor = stage.palette.sun;
+  ctx.shadowBlur = 60;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function stageGround(ctx, stage, y) {
+  const floor = ctx.createLinearGradient(0, y, 0, VH);
+  floor.addColorStop(0, stage.palette.ground);
+  floor.addColorStop(1, stage.palette.skyTop);
+  ctx.fillStyle = floor;
+  ctx.fillRect(0, y, VW, VH - y);
+  ctx.strokeStyle = stage.palette.accent;
+  ctx.globalAlpha = 0.5;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, y);
+  ctx.lineTo(VW, y);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+function drawDesert(ctx, cameraX, t, stage) {
+  stageSky(ctx, stage);
+  stageSun(ctx, stage, 700 - cameraX * 0.03, 170, 74);
+
+  const far = ctx.createLinearGradient(0, 300, 0, WORLD.ground);
+  far.addColorStop(0, stage.palette.far);
+  far.addColorStop(1, stage.palette.mid);
+  ctx.fillStyle = far;
+  ctx.beginPath();
+  ctx.moveTo(0, 400);
+  for (let x = 0; x <= VW; x += 40) {
+    const y = 392 + Math.sin((x + cameraX * 0.15) * 0.006) * 26;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(VW, VH);
+  ctx.lineTo(0, VH);
+  ctx.fill();
+
+  ctx.fillStyle = stage.palette.mid;
+  ctx.beginPath();
+  ctx.moveTo(0, 448);
+  for (let x = 0; x <= VW; x += 30) {
+    const y = 442 + Math.sin((x + cameraX * 0.32 + 140) * 0.009) * 16;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(VW, VH);
+  ctx.lineTo(0, VH);
+  ctx.fill();
+
+  // Heat shimmer.
+  ctx.strokeStyle = stage.palette.accent;
+  ctx.globalAlpha = 0.12;
+  for (let i = 0; i < 5; i += 1) {
+    const y = 380 + i * 16;
+    ctx.beginPath();
+    for (let x = 0; x <= VW; x += 12) {
+      ctx.lineTo(x, y + Math.sin((x + t * 1.5) * 0.05 + i) * 2);
+    }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  stageGround(ctx, stage, WORLD.ground);
+}
+
+function drawSnow(ctx, cameraX, t, stage) {
+  stageSky(ctx, stage);
+  stageSun(ctx, stage, 760 - cameraX * 0.02, 140, 52);
+
+  ctx.fillStyle = stage.palette.mid;
+  ctx.beginPath();
+  ctx.moveTo(0, 420);
+  for (let i = 0; i < 6; i += 1) {
+    const x = i * 200 - ((cameraX * 0.1) % 200);
+    ctx.lineTo(x + 100, 250 + (i % 2) * 40);
+    ctx.lineTo(x + 200, 420);
+  }
+  ctx.lineTo(VW, VH);
+  ctx.lineTo(0, VH);
+  ctx.fill();
+
+  ctx.fillStyle = stage.palette.far;
+  ctx.beginPath();
+  ctx.moveTo(0, 460);
+  for (let i = 0; i < 5; i += 1) {
+    const x = i * 240 - ((cameraX * 0.2) % 240);
+    ctx.lineTo(x + 120, 300 + (i % 2) * 50);
+    ctx.lineTo(x + 240, 460);
+  }
+  ctx.lineTo(VW, VH);
+  ctx.lineTo(0, VH);
+  ctx.fill();
+
+  stageGround(ctx, stage, WORLD.ground);
+  ctx.fillStyle = '#ffffff';
+  for (let i = 0; i < 70; i += 1) {
+    const x = (i * 137 + t * 0.7 + cameraX * 0.15) % VW;
+    const y = (i * 83 + t * 1.1) % 460;
+    ctx.globalAlpha = 0.35 + ((i * 7) % 10) / 20;
+    ctx.fillRect(x, y, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawGrassland(ctx, cameraX, t, stage) {
+  stageSky(ctx, stage);
+  stageSun(ctx, stage, 220 - cameraX * 0.02, 130, 46);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  for (let i = 0; i < 4; i += 1) {
+    const x = ((i * 260 + t * 0.15 - cameraX * 0.05) % (VW + 260)) - 130;
+    ctx.beginPath();
+    ctx.ellipse(x, 120 + i * 26, 90, 18, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = stage.palette.far;
+  ctx.beginPath();
+  ctx.moveTo(0, 430);
+  for (let x = 0; x <= VW; x += 40) {
+    ctx.lineTo(x, 400 + Math.sin((x + cameraX * 0.12) * 0.008) * 30);
+  }
+  ctx.lineTo(VW, VH);
+  ctx.lineTo(0, VH);
+  ctx.fill();
+
+  ctx.fillStyle = stage.palette.mid;
+  ctx.beginPath();
+  ctx.moveTo(0, 456);
+  for (let x = 0; x <= VW; x += 24) {
+    ctx.lineTo(x, 448 + Math.sin((x + cameraX * 0.3 + 80) * 0.01) * 10);
+  }
+  ctx.lineTo(VW, VH);
+  ctx.lineTo(0, VH);
+  ctx.fill();
+
+  stageGround(ctx, stage, WORLD.ground);
+  ctx.strokeStyle = stage.palette.accent;
+  ctx.globalAlpha = 0.35;
+  for (let i = 0; i < 40; i += 1) {
+    const x = (i * 61 + cameraX * 0.5) % VW;
+    const y = 470 + ((i * 13) % 60);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.sin(t * 0.05 + i) * 4, y - 10);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawRain(ctx, cameraX, t, stage) {
+  stageSky(ctx, stage);
+
+  ctx.fillStyle = stage.palette.mid;
+  for (let i = 0; i < 10; i += 1) {
+    const x = i * 110 - ((cameraX * 0.25) % 110);
+    const h = 150 + ((i * 37) % 130);
+    ctx.fillRect(x, WORLD.ground - h, 84, h);
+  }
+
+  ctx.fillStyle = stage.palette.far;
+  for (let i = 0; i < 8; i += 1) {
+    const x = i * 140 - ((cameraX * 0.12) % 140);
+    const h = 210 + ((i * 53) % 90);
+    ctx.fillRect(x, WORLD.ground - h, 100, h);
+  }
+
+  stageGround(ctx, stage, WORLD.ground);
+
+  ctx.strokeStyle = 'rgba(160, 200, 255, 0.4)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 90; i += 1) {
+    const x = (i * 71 + t * 2.2 + cameraX * 0.2) % VW;
+    const y = (i * 47 + t * 7) % 520;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - 3, y + 14);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = stage.palette.accent2;
+  ctx.globalAlpha = 0.12;
+  for (let i = 0; i < 6; i += 1) {
+    ctx.fillRect((i * 170 + 40) % VW, 470 + (i % 3) * 12, 120, 4);
+  }
+  ctx.globalAlpha = 1;
+}
+

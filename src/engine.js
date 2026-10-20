@@ -5,6 +5,8 @@
 
 import {
   CHARACTERS,
+  COMBO_TIMEOUT,
+  MAX_ROUNDS,
   MOVES,
   PROJECTILES,
   ROUNDS_TO_WIN,
@@ -94,12 +96,19 @@ export class Engine {
         this.events.push({ type: 'fight' });
       }
     } else if (this.phase === 'fight') {
-      this.p1.update(inputP1, this.p2);
-      this.p2.update(inputP2, this.p1);
+      // Alternate update order every frame so neither player owns a
+      // systematic first-move advantage in trades.
+      if (this.frame % 2 === 0) {
+        this.p1.update(inputP1, this.p2, this);
+        this.p2.update(inputP2, this.p1, this);
+      } else {
+        this.p2.update(inputP2, this.p1, this);
+        this.p1.update(inputP1, this.p2, this);
+      }
       this.separate();
       this.spawnPending();
       this.updateProjectiles();
-      this.resolveStrikes();
+      this.resolveStrikes(inputP1, inputP2);
       this.tickCombo();
       this.timer = Math.max(0, this.timer - 1);
       if (this.timer <= 0) this.timeUp();
@@ -148,6 +157,17 @@ export class Engine {
       this.phaseTimer = 0;
       return;
     }
+    if (this.round >= MAX_ROUNDS) {
+      if (this.p1.wins === this.p2.wins) {
+        this.matchWinner = null;
+        this.events.push({ type: 'draw' });
+      } else {
+        this.matchWinner = this.p1.wins > this.p2.wins ? this.p1 : this.p2;
+      }
+      this.phase = 'matchOver';
+      this.phaseTimer = 0;
+      return;
+    }
     this.phase = 'roundEnd';
     this.phaseTimer = 0;
   }
@@ -171,18 +191,29 @@ export class Engine {
       if (!fighter.pendingProjectile) continue;
       const kind = fighter.pendingProjectile;
       fighter.pendingProjectile = null;
-      this.projectiles.push(this.makeProjectile(fighter, kind));
+      // U tools are limited to one live projectile per owner; supers and
+      // placed orbs are exempt (the fighter-level check already blocks U).
+      const pendingMove = MOVES[kind];
+      if (pendingMove?.u && this.projectiles.some((proj) => proj.owner === fighter && !proj.dead)) continue;
+      if (pendingMove?.spread) {
+        for (let i = 0; i < pendingMove.spread; i += 1) {
+          this.projectiles.push(this.makeProjectile(fighter, kind, { yOffset: 64 + i * 38 }));
+        }
+      } else {
+        this.projectiles.push(this.makeProjectile(fighter, kind));
+      }
       this.events.push({ type: kind === 'super' ? 'super' : 'special' });
     }
   }
 
-  makeProjectile(owner, kind) {
+  makeProjectile(owner, kind, opts = {}) {
     const def = PROJECTILES[kind];
+    const offset = opts.offset ?? (def.place ? 90 : 46);
     return {
       owner,
       kind,
-      x: owner.x + owner.facing * 46,
-      y: owner.y - 104,
+      x: owner.x + owner.facing * offset,
+      y: owner.y - (opts.yOffset ?? def.yOffset ?? 104),
       vx: owner.facing * def.speed,
       radius: def.radius,
       life: def.life,
@@ -201,6 +232,26 @@ export class Engine {
         proj.dead = true;
         continue;
       }
+      // Projectile clash: supers beat normal waves, otherwise both vanish.
+      for (const other of this.projectiles) {
+        if (other === proj || other.dead || other.owner === proj.owner) continue;
+        if (Math.hypot(other.x - proj.x, other.y - proj.y) > proj.radius + other.radius) continue;
+        const projSuper = proj.kind === 'super';
+        const otherSuper = other.kind === 'super';
+        if (projSuper && !otherSuper) {
+          other.dead = true;
+        } else if (otherSuper && !projSuper) {
+          proj.dead = true;
+        } else {
+          proj.dead = true;
+          other.dead = true;
+        }
+        this.spark((proj.x + other.x) / 2, proj.y, '#b6f3ff', 14);
+        this.events.push({ type: 'block' });
+        this.hitstop = 3;
+        break;
+      }
+      if (proj.dead) continue;
       const target = proj.owner === this.p1 ? this.p2 : this.p1;
       if (target.invuln > 0) continue;
       const box = {
@@ -227,10 +278,11 @@ export class Engine {
         this.events.push({ type: 'block' });
         this.hitstop = 3;
       } else {
-        const dmg = Math.round(proj.def.damage * this.damageScale(proj.owner));
+        const dmg = Math.round(proj.def.damage * this.damageScale(proj.owner) * proj.owner.char.damageScale);
         target.onHit(pseudo, dmg);
-        proj.owner.meter = clamp(proj.owner.meter + 10, 0, 100);
-        target.meter = clamp(target.meter + 6, 0, 100);
+        const ownerGain = proj.def.meterGain ?? 10;
+        proj.owner.meter = clamp(proj.owner.meter + ownerGain, 0, 100);
+        target.meter = clamp(target.meter + (proj.def.meterGain ? 2 : 6), 0, 100);
         this.spark(proj.x, proj.y, proj.kind === 'super' ? '#ffe066' : '#a7e0ff', 18);
         this.hitstop = proj.def.hitstop;
         this.shake = proj.def.shake;
@@ -243,51 +295,122 @@ export class Engine {
     this.projectiles = this.projectiles.filter((p) => !p.dead);
   }
 
-  resolveStrikes() {
+  resolveStrikes(inputP1 = {}, inputP2 = {}) {
+    const inputs = { p1: inputP1, p2: inputP2 };
+    const hits = [];
+    const origHurt = { p1: this.p1.hurtbox, p2: this.p2.hurtbox };
     for (const attacker of this.fighters) {
       const defender = attacker === this.p1 ? this.p2 : this.p1;
       if (attacker.hitDone) continue;
+      const move = MOVES[attacker.move];
+      if (!move) continue;
+
+      if (move.throw) {
+        if (attacker.moveFrame <= move.startup || attacker.moveFrame > move.startup + move.active) continue;
+        const dx = Math.abs(defender.x - attacker.x);
+        const busy = ['hitstun', 'blockstun', 'knockdown', 'getup', 'ko'].includes(defender.state);
+        if (dx > move.range || defender.airborne || defender.invuln > 0 || busy) continue;
+        attacker.hitDone = true;
+        const defenderInput = inputs[defender.id] || {};
+        const teched = Boolean(defenderInput.tech) || Boolean(defenderInput.light && defenderInput.heavy);
+        hits.push({ attacker, defender, move, kind: 'throw', teched });
+        continue;
+      }
+
       const box = attacker.activeHitbox();
       if (!box) continue;
       if (defender.invuln > 0) continue;
-      if (!overlaps(box, defender.hurtbox)) continue;
-      const move = MOVES[attacker.move];
+      if (!overlaps(box, origHurt[defender.id])) continue;
       attacker.hitDone = true;
       const blocked = defender.canBlock(move);
-      const cx = (Math.max(box.x, defender.hurtbox.x) + Math.min(box.x + box.w, defender.hurtbox.x + defender.hurtbox.w)) / 2;
-      const cy = (Math.max(box.y, defender.hurtbox.y) + Math.min(box.y + box.h, defender.hurtbox.y + defender.hurtbox.h)) / 2;
+      const cx = (Math.max(box.x, origHurt[defender.id].x) + Math.min(box.x + box.w, origHurt[defender.id].x + origHurt[defender.id].w)) / 2;
+      const cy = (Math.max(box.y, origHurt[defender.id].y) + Math.min(box.y + box.h, origHurt[defender.id].y + origHurt[defender.id].h)) / 2;
+      hits.push({ attacker, defender, move, kind: blocked ? 'block' : 'hit', cx, cy });
+    }
 
-      if (blocked) {
-        defender.onBlock(move, 0);
-        attacker.meter = clamp(attacker.meter + move.meterGain * 0.5, 0, 100);
-        defender.meter = clamp(defender.meter + move.meterGain * 0.4, 0, 100);
-        this.spark(cx, cy, '#8fcbff', 7);
-        this.hitstop = 3;
-        this.shake = 4;
-        this.events.push({ type: 'block' });
-      } else {
-        const dmg = Math.round(move.damage * this.damageScale(attacker));
-        defender.onHit(move, dmg);
+    // Apply every connect found this frame so simultaneous strikes trade
+    // instead of giving player one a free first hit.
+    for (const hit of hits) {
+      const { attacker, defender, move } = hit;
+      if (hit.kind === 'throw') {
+        if (hit.teched) {
+          this.events.push({ type: 'block' });
+          attacker.vx = -attacker.facing * 2;
+          defender.vx = defender.facing * 2;
+          this.spark((attacker.x + defender.x) / 2, defender.y - 90, '#8fcbff', 8);
+          defender.meter = clamp(defender.meter + 4, 0, 100);
+          this.hitstop = 3;
+          continue;
+        }
+        const dmg = Math.round(move.damage * this.damageScale(attacker) * attacker.char.damageScale);
+        defender.onHit({ ...move, knockdown: true, push: 5.2 }, dmg);
         attacker.meter = clamp(attacker.meter + move.meterGain, 0, 100);
-        defender.meter = clamp(defender.meter + move.meterGain * 0.6, 0, 100);
-        this.spark(cx, cy, move.knockdown ? '#ffd166' : '#fff2b8', move.knockdown ? 16 : 10);
-        this.hitstop = move.knockdown ? 7 : 4;
-        this.shake = move.knockdown ? 10 : 6;
+        defender.meter = clamp(defender.meter + 4, 0, 100);
+        this.spark(defender.x, defender.y - 90, '#ffd166', 16);
+        attacker.confirmHit();
+        this.hitstop = 7;
+        this.shake = 9;
         this.events.push({ type: 'hit' });
         this.registerCombo(attacker);
-        if (defender.hp <= 0) this.finishRound();
+        continue;
       }
+
+      if (hit.kind === 'block') {
+        const blockedMove = { ...move, blockstun: Math.max(4, Math.round(move.blockstun * this.hitstunScale(attacker))) };
+        defender.onBlock(blockedMove, 0);
+        attacker.confirmHit();
+        attacker.meter = clamp(attacker.meter + move.meterGain * 0.5, 0, 100);
+        defender.meter = clamp(defender.meter + move.meterGain * 0.4, 0, 100);
+        this.spark(hit.cx, hit.cy, '#8fcbff', 7);
+        this.hitstop = Math.max(this.hitstop, 3);
+        this.shake = 4;
+        this.events.push({ type: 'block' });
+        continue;
+      }
+
+      const dmg = Math.round(move.damage * this.damageScale(attacker) * attacker.char.damageScale);
+      const stunScale = this.hitstunScale(attacker);
+      const pushScale = this.pushScale(attacker);
+      defender.onHit(
+        {
+          ...move,
+          hitstun: Math.max(6, Math.round((move.hitstun ?? 12) * stunScale)),
+          push: (move.push ?? 2.5) * pushScale,
+        },
+        dmg,
+        { juggleHit: defender.airborne },
+      );
+      attacker.confirmHit();
+      attacker.meter = clamp(attacker.meter + move.meterGain, 0, 100);
+      defender.meter = clamp(defender.meter + move.meterGain * 0.6, 0, 100);
+      this.spark(hit.cx, hit.cy, move.knockdown ? '#ffd166' : '#fff2b8', move.knockdown ? 16 : 10);
+      this.hitstop = Math.max(this.hitstop, move.knockdown ? 7 : 4);
+      this.shake = move.knockdown ? 10 : 6;
+      this.events.push({ type: 'hit' });
+      this.registerCombo(attacker);
     }
+
+    if (this.p1.hp <= 0 || this.p2.hp <= 0) this.finishRound();
   }
 
   damageScale(attacker) {
     const combo = this.combo[attacker.id] ?? 0;
-    return Math.max(0.4, 1 - combo * 0.07);
+    return Math.max(0.3, 1 - combo * 0.09);
+  }
+
+  hitstunScale(attacker) {
+    const combo = this.combo[attacker.id] ?? 0;
+    return Math.max(0.55, 1 - combo * 0.12);
+  }
+
+  pushScale(attacker) {
+    const combo = this.combo[attacker.id] ?? 0;
+    return Math.max(0.35, Math.pow(0.85, combo));
   }
 
   registerCombo(attacker) {
     this.combo[attacker.id] = (this.combo[attacker.id] ?? 0) + 1;
-    this.comboTimer[attacker.id] = 54;
+    this.comboTimer[attacker.id] = COMBO_TIMEOUT;
   }
 
   tickCombo() {

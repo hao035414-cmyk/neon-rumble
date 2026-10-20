@@ -1,14 +1,19 @@
 /**
- * Boot, loop and shell: title screen, match lifecycle, pause and audio.
+ * Boot, loop and shell: title, character/stage select, VS, fight, pause and audio.
  */
 
 import { Engine } from './engine.js';
 import { InputManager } from './input.js';
 import { AI } from './ai.js';
-import { VIEW } from './config.js';
+import { AudioEngine } from './audio.js';
+import { CHARACTERS, KEYS, VIEW } from './config.js';
+import { STAGE_BY_ID } from './stages.js';
+import { SelectState } from './select.js';
+import { drawCharacterSelect, drawStageSelect, drawVS } from './render-select.js';
 import { drawPause, drawTitle, renderScene } from './render.js';
 
 const STEP = 1000 / 60;
+const VS_FRAMES = 90;
 
 class Sfx {
   constructor() {
@@ -18,11 +23,9 @@ class Sfx {
 
   ensure() {
     if (this.muted) return null;
-    if (!this.ctx) {
-      const Ctor = window.AudioContext || window.webkitAudioContext;
-      if (!Ctor) return null;
-      this.ctx = new Ctor();
-    }
+    const shared = audio.ensure();
+    if (!shared) return null;
+    this.ctx = shared;
     if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
     return this.ctx;
   }
@@ -81,18 +84,20 @@ canvas.height = VIEW.height * dpr;
 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
 const input = new InputManager(window);
+const audio = new AudioEngine();
 const sfx = new Sfx();
 const ai = new AI({ difficulty: 1 });
 const aiP1 = new AI({ difficulty: 1 });
 const params = new URLSearchParams(window.location.search);
 const demo = params.has('demo');
+const quick = params.has('quick') || demo;
 const debug = params.has('debug');
 
 window.addEventListener('error', (event) => {
   const el = document.createElement('pre');
   el.style.cssText =
     'position:fixed;left:8px;bottom:8px;z-index:99;margin:0;padding:8px;background:#160008;color:#ff6b6b;font:12px monospace;max-width:92vw;white-space:pre-wrap;border:1px solid #ff6b6b';
-  el.textContent = `ERROR: ${event.message}\n${event.error?.stack ?? ''}`;
+  el.textContent = 'ERROR: ' + event.message + '\n' + (event.error?.stack ?? '');
   document.body.appendChild(el);
 });
 
@@ -100,38 +105,80 @@ const ui = { muted: false, debug };
 let mode = 'cpu';
 let state = 'title';
 let engine = null;
+let selectState = null;
+let matchSetup = null;
+let lastLoser = null;
+let vsTimer = 0;
 let started = performance.now();
 
-function startMatch(nextMode) {
+function pickChar(key, fallback) {
+  const value = params.get(key);
+  return value && CHARACTERS[value] ? value : fallback;
+}
+
+function startMatch(nextMode, setup = {}) {
   mode = nextMode;
-  engine = new Engine();
+  const p1 = setup.p1 ?? pickChar('p1', 'kai');
+  const p2 = setup.p2 ?? pickChar('p2', 'rin');
+  const stageId = setup.stage ?? params.get('stage') ?? 'neon_city';
+  engine = new Engine({ charA: p1, charB: p2 });
+  engine.stageId = STAGE_BY_ID[stageId] ? stageId : 'neon_city';
+  matchSetup = { p1, p2, stage: engine.stageId };
   state = 'fight';
   input.clearHits();
   sfx.play('fight');
+  audio.playTrack(engine.stageId);
   started = performance.now();
+}
+
+function beginSelect(nextMode, loser = null) {
+  mode = nextMode;
+  lastLoser = loser;
+  selectState = new SelectState({ mode: nextMode, lastLoser: loser, difficulty: 1 });
+  state = 'select';
+  input.clearHits();
+  audio.playTrack('menu');
 }
 
 function toTitle() {
   engine = null;
   state = 'title';
   input.clearHits();
+  audio.playTrack('menu');
+}
+
+function menuInputs() {
+  const read = (id) => ({
+    left: input.tappedAny(KEYS[id].left),
+    right: input.tappedAny(KEYS[id].right),
+    up: input.tappedAny(KEYS[id].up),
+    down: input.tappedAny(KEYS[id].down),
+    confirm: input.tappedAny(KEYS[id].light),
+    cancel: input.tappedAny(KEYS[id].heavy),
+  });
+  return { p1: read('p1'), p2: read('p2') };
 }
 
 window.addEventListener('keydown', (event) => {
   if (event.code === 'KeyM') {
     sfx.muted = !sfx.muted;
     ui.muted = sfx.muted;
+    audio.setMuted(sfx.muted);
     return;
   }
 
   if (state === 'title') {
-    if (event.code === 'Enter' || event.code === 'NumpadEnter') {
-      startMatch('cpu');
-    } else if (event.code === 'Digit2' || event.code === 'Numpad2') {
-      startMatch('2p');
-    }
+    if (event.code === 'Enter' || event.code === 'NumpadEnter') beginSelect('cpu');
+    else if (event.code === 'Digit2' || event.code === 'Numpad2') beginSelect('2p');
     return;
   }
+
+  if (state === 'select') {
+    if (event.code === 'Escape') toTitle();
+    return;
+  }
+
+  if (state === 'vs') return;
 
   if (event.code === 'Escape' || event.code === 'KeyP') {
     if (state === 'fight') state = 'paused';
@@ -143,17 +190,22 @@ window.addEventListener('keydown', (event) => {
   }
 
   if (event.code === 'KeyR' && (state === 'fight' || state === 'paused' || state === 'over')) {
-    startMatch(mode);
+    if (matchSetup) startMatch(mode, matchSetup);
     return;
   }
 
-  if (event.code === 'KeyQ' && state === 'paused') {
+  if (event.code === 'KeyC' && (state === 'paused' || state === 'over')) {
+    beginSelect(mode, lastLoser);
+    return;
+  }
+
+  if (event.code === 'KeyQ' && (state === 'paused' || state === 'over')) {
     toTitle();
     return;
   }
 
   if ((event.code === 'Enter' || event.code === 'NumpadEnter') && state === 'over') {
-    startMatch(mode);
+    if (matchSetup) startMatch(mode, matchSetup);
   }
 });
 
@@ -162,10 +214,30 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function update() {
+  if (state === 'select') {
+    const snap = selectState.update(menuInputs());
+    input.clearHits();
+    if (snap.done) {
+      vsTimer = VS_FRAMES;
+      state = 'vs';
+      audio.playTrack(selectState.stage);
+    }
+    return;
+  }
+
+  if (state === 'vs') {
+    vsTimer -= 1;
+    if (vsTimer <= 0) {
+      startMatch(mode, { p1: selectState.pick.p1, p2: selectState.pick.p2, stage: selectState.stage });
+    }
+    return;
+  }
+
   if (state !== 'fight' || !engine) return;
 
   if (engine.isOver) {
     state = 'over';
+    lastLoser = engine.matchWinner === engine.p1 ? 'p2' : engine.matchWinner === engine.p2 ? 'p1' : 'p1';
     return;
   }
 
@@ -176,17 +248,31 @@ function update() {
 
   for (const event of engine.drainEvents()) sfx.play(event.type);
 
-  if (engine.isOver) state = 'over';
+  if (engine.isOver) {
+    state = 'over';
+    lastLoser = engine.matchWinner === engine.p1 ? 'p2' : engine.matchWinner === engine.p2 ? 'p1' : 'p1';
+  }
 }
 
 function draw(now) {
-  if (state === 'title' || !engine) {
+  if (state === 'title') {
     drawTitle(ctx, now / 16, state);
     return;
   }
-
+  if (state === 'select') {
+    if (selectState.phase === 'stage') drawStageSelect(ctx, selectState, now / 16);
+    else drawCharacterSelect(ctx, selectState, now / 16);
+    return;
+  }
+  if (state === 'vs') {
+    drawVS(ctx, selectState, VS_FRAMES - vsTimer);
+    return;
+  }
+  if (!engine) {
+    drawTitle(ctx, now / 16, state);
+    return;
+  }
   renderScene(ctx, engine, ui);
-
   if (state === 'paused') drawPause(ctx);
 }
 
@@ -210,7 +296,26 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-if (demo) {
+const screen = params.get('screen');
+if (screen === 'select') {
+  beginSelect(params.get('mode') === '2p' ? '2p' : 'cpu');
+}
+if (screen === 'stage' || screen === 'vs') {
+  beginSelect('cpu');
+  selectState.pick = { p1: params.get('p1') || 'nova', p2: params.get('p2') || 'volt' };
+  selectState.locked = { p1: true, p2: true };
+  selectState.phase = 'stage';
+  selectState.stageCursor = 1;
+  if (screen === 'vs') {
+    selectState.stage = params.get('stage') || 'desert_dusk';
+    selectState.done = true;
+    selectState.phase = 'done';
+    vsTimer = VS_FRAMES;
+    state = 'vs';
+  }
+}
+
+if (quick) {
   startMatch('cpu');
   const ff = Number(params.get('ff') ?? 0);
   if (Number.isFinite(ff) && ff > 0) {
@@ -221,7 +326,6 @@ if (demo) {
 
 requestAnimationFrame(frame);
 
-// Expose a tiny debug handle for the browser console.
 window.__neonRumble = {
   get engine() {
     return engine;
@@ -229,6 +333,10 @@ window.__neonRumble = {
   get state() {
     return state;
   },
-  start: startMatch,
-  toTitle,
+  get selectState() {
+    return selectState;
+  },
+  get audio() {
+    return audio;
+  },
 };

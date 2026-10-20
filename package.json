@@ -1,11 +1,13 @@
 {
   "name": "neon-rumble",
-  "version": "0.1.0",
+  "version": "1.2.0",
   "description": "A dependency-free 2D fighting game in the spirit of classic arcade fighters, built with HTML5 Canvas.",
   "type": "module",
   "scripts": {
     "start": "python -m http.server 8080",
-    "test": "node test/sim.test.mjs"
+    "test": "node test/sim.test.mjs && node test/audio.test.mjs && node test/select.test.mjs && node test/stages.test.mjs",
+    "balance": "node tools/balance.mjs 300",
+    "perf": "node tools/perf.mjs"
   },
   "keywords": [
     "game",

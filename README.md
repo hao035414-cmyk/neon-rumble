@@ -1,110 +1,87 @@
 # NEON RUMBLE
 
-**A dependency-free 2D fighting game that runs in the browser.** Jab, kick, anti-air, block low, and land a super in a neon city — no engine, no build step, no image assets.
+A dependency-free 2D fighting game that runs in the browser. Six fighters, one ranged tool each, five stages, and a fully synthesized soundtrack — no engine, no build step, no image or audio assets.
 
-[**▶ Play it**](https://hao035414-cmyk.github.io/neon-rumble/) · [Report a bug](https://github.com/hao035414-cmyk/neon-rumble/issues)
+Play: https://hao035414-cmyk.github.io/neon-rumble/
 
-[![test](https://github.com/hao035414-cmyk/neon-rumble/actions/workflows/test.yml/badge.svg)](https://github.com/hao035414-cmyk/neon-rumble/actions/workflows/test.yml)
-
-![NEON RUMBLE](docs/fight.png)
+![NEON RUMBLE](docs/shot-roster.png)
 
 ## Features
 
-- **Classic 1v1 fighting rules** — best of 3 rounds, 99-second timer, KO and time-over.
-- **Six normals** — jab, heavy, kick, crouching low, jump-in, plus a projectile special and a 100-meter super.
-- **Real fighting-game logic** — startup/active/recovery frames, hitstun, blockstun, knockdowns, invulnerable wake-up, pushback, combo scaling.
-- **Correct blocking rules** — lows must be crouch-blocked, jump-ins are overheads, projectiles chip.
-- **Motion inputs** — quarter-circle forward for the special, double quarter-circle for the super.
-- **A readable CPU** — approaches, pokes, anti-airs, blocks and throws fireballs.
-- **Local 2P** on one keyboard.
-- **Zero dependencies** — plain ES modules + Canvas 2D. The simulation is DOM-free and unit-tested under Node.
+- **Six fighters with different kits** — KAI (balanced), RIN (rushdown), VOLT (grappler), NOVA (archer), SABER (combo), ECHO (setplay). Everyone shares the same normals; each fighter owns a U ranged tool, an S special and a super.
+- **U ranged system** — low damage, easy to dodge, one projectile per player, usable in the air once per jump. Cancel a normal into U to keep the pressure going.
+- **Real fighting-game logic** — frame data, blockstun, hitstun decay, pushback scaling, juggles, throws with tech, invincible reversals, projectiles that clash.
+- **Character and stage select** — 30 second pick, random slots, mirror matches with alternate palettes, CPU difficulty, loser picks the stage in 2P.
+- **Five stages, five BGM tracks** — neon city, desert dusk, snow peak, grassland, rainy night. All music is synthesized with WebAudio at runtime; no audio files are shipped.
+- **Zero dependencies** — plain ES modules + Canvas 2D. The simulation is DOM-free and tested under Node.
 
 ## Play
 
-### In the browser
+Open the live build, or serve the folder locally:
 
-Open the [live build](https://hao035414-cmyk.github.io/neon-rumble/), or serve the folder locally:
+    python -m http.server 8080
+    # http://localhost:8080
 
-```bash
-python -m http.server 8080
-# http://localhost:8080
-```
-
-Any static file server works; there is nothing to install or compile.
+Title: Enter for 1P vs CPU, 2 for local 2P. Then pick a fighter (A/D + J) and a stage (J).
 
 ### Controls
 
 | Action | Player 1 | Player 2 |
 | --- | --- | --- |
-| Move | `A` / `D` | `←` / `→` |
-| Jump | `W` | `↑` |
-| Crouch | `S` | `↓` |
-| Jab (light) | `J` | `1` (numpad) |
-| Heavy | `K` | `2` (numpad) |
-| Kick | `L` | `3` (numpad) |
-| Special | `↓ ↘ →` + attack | `↓ ↙ ←` + attack |
-| Super (100 meter) | `↓ ↘ → ↓ ↘ →` + heavy | `↓ ↙ ← ↓ ↙ ←` + heavy |
+| Move / jump / crouch | A D / W / S | arrows / up / down |
+| Jab / heavy / kick | J / K / L | numpad 1 / 2 / 3 |
+| Ranged (U) | U | numpad 4 |
+| Special (S) | motion + attack | mirrored motion + attack |
+| Super (100 meter) | double motion + heavy | mirrored |
+| Throw / tech | J + K | 1 + 2 |
+| Low / launcher | S + L / S + K | down + 3 / down + 2 |
+| Overhead | forward + L | forward + 3 |
+| Dash / backdash | tap direction twice | tap direction twice |
 
-`Esc` pause · `R` restart · `M` mute.
+Esc pause, R restart, C back to select, Q title, M mute.
 
-### Rules
+### Stages and music
 
-- First to **2 rounds** wins. A round ends on KO or when the 99-second timer expires (higher health wins).
-- **Specials** are free; the **super** costs a full meter. Meter builds on hits, blocks and taking damage.
-- **Lows** (`S` + kick) must be crouch-blocked; **jump attacks** are overheads and must be stand-blocked.
-- Combos scale: every extra hit deals a little less damage.
-- Knockdowns give a short invulnerable wake-up, so you cannot be looped forever.
+| Stage | BGM |
+| --- | --- |
+| NEON CITY / 霓虹街道 | synthwave, 124 BPM, A minor |
+| DESERT DUSK / 荒漠落日 | 96 BPM, phrygian colour, dry drums |
+| SNOW PEAK / 雪山之巅 | 72 BPM, sparse bells, no drums |
+| GRASSLAND WIND / 草原长风 | 104 BPM, pentatonic, bright plucks |
+| RAINY NIGHT / 雨夜街头 | 84 BPM, lo-fi, soft percussion |
 
 ## How it is built
 
 | File | Responsibility |
 | --- | --- |
-| `src/config.js` | Frame data, characters, input maps |
-| `src/fighter.js` | Per-fighter state machine, movement, boxes |
-| `src/engine.js` | Hit resolution, projectiles, rounds, camera |
-| `src/ai.js` | CPU opponent |
-| `src/render.js` | Stage, procedural fighters, effects, HUD |
-| `src/input.js` | Keyboard and motion recognition |
-| `src/main.js` | Loop, title screen, pause, audio |
+| src/config.js | Frame data, characters, projectiles, input maps |
+| src/characters.js | Per-character U / S / super mapping and stats |
+| src/fighter.js | Per-fighter state machine, movement, boxes |
+| src/engine.js | Hit resolution, projectiles, rounds, camera |
+| src/ai.js | Reaction-delayed CPU with per-kit behaviour |
+| src/select.js | Character/stage state machine (DOM-free) |
+| src/render.js | Stages, fighters, effects, HUD |
+| src/render-select.js | Select, stage and VS screens |
+| src/audio.js | Procedural BGM engine |
+| src/audio-tracks.js | Five stage tracks + menu track |
+| src/stages.js | Stage palettes and music mapping |
+| src/main.js | Loop, screens, pause, audio |
 
-The simulation (`fighter.js` + `engine.js` + `ai.js`) never touches the DOM, which is why it can be tested headlessly:
-
-```bash
-npm test
-```
-
-The test suite runs a full CPU-vs-CPU match, then checks strikes, blocking, projectiles, supers, KO flow and round resets.
+    npm test                     # simulation + audio + select + stage tests
+    node tools/matchups.mjs 60   # 6x5 AI matchup matrix
+    node tools/balance.mjs 300   # difficulty ladder
+    node tools/perf.mjs          # simulation cost
 
 ## Roadmap
 
-- [ ] More characters and stages
-- [ ] Throw / tech system
+- [x] Six fighters with unique kits
+- [x] Character and stage select
+- [x] Five stages with per-stage BGM
+- [ ] Per-match BGM variations
 - [ ] Training mode with hitbox display
 - [ ] Gamepad support
 - [ ] Replay recording
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
-
-This is an original fan-made project. It is not affiliated with, endorsed by, or containing assets from SNK, Capcom, or any commercial fighting game.
-
----
-
-<details>
-<summary>中文说明</summary>
-
-**NEON RUMBLE 是一个零依赖的浏览器 2D 格斗游戏。**
-
-- 三局两胜、99 秒读秒、KO 与时间到判定
-- 轻拳 / 重拳 / 踢 / 下段 / 跳跃攻击 / 波动 / 100 气超必杀
-- 起手帧、命中硬直、防御硬直、击倒、起身无敌、连段递减
-- 下段必须蹲防，跳跃攻击是 overhead，波动有削血
-- 招式指令：下前下前 + 攻击
-- 单人 CPU 与本地双人
-
-**运行**：任意静态服务器即可，或直接打开线上版。
-
-**测试**：`npm test` 在 Node 下跑完整对局与战斗规则断言。
-
-</details>
+MIT — see LICENSE.

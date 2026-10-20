@@ -1,9 +1,10 @@
 /**
- * Keyboard input with fighting-game motion recognition (quarter-circle
- * forward and double quarter-circle) per player.
+ * Keyboard input with fighting-game motion recognition:
+ * QCF (wave), DP (rising fang), double QCF (super), double-tap dash,
+ * light+heavy throw / throw tech, and a short attack buffer.
  */
 
-import { KEYS } from './config.js';
+import { INPUT_BUFFER, KEYS, THROW_TECH_WINDOW } from './config.js';
 
 const GAME_CODES = new Set([
   ...Object.values(KEYS.p1).flat(),
@@ -12,6 +13,7 @@ const GAME_CODES = new Set([
 
 const QCF = ['d', 'df', 'f'];
 const QCF2 = [...QCF, ...QCF];
+const DP = ['f', 'd', 'df'];
 
 const isSubsequence = (tokens, pattern) => {
   let i = 0;
@@ -22,12 +24,18 @@ const isSubsequence = (tokens, pattern) => {
   return false;
 };
 
+const freshPress = () => ({ light: -99, heavy: -99, kick: -99 });
+const freshTap = () => ({ left: -99, right: -99 });
+
 export class InputManager {
   constructor(target = window) {
     this.target = target;
     this.down = new Set();
     this.hit = new Set();
     this.buffer = { p1: [], p2: [] };
+    this.press = { p1: freshPress(), p2: freshPress() };
+    this.tap = { p1: freshTap(), p2: freshTap() };
+    this.techFrame = { p1: -99, p2: -99 };
     this.frame = 0;
 
     this.onKeyDown = (event) => {
@@ -81,29 +89,73 @@ export class InputManager {
       light: false,
       heavy: false,
       kick: false,
+      u: false,
       special: false,
       super: false,
+      dp: false,
+      ex: false,
+      throw: false,
+      tech: false,
+      dashLeft: false,
+      dashRight: false,
     };
 
-    const tokens = this.sampleMotion(id);
-    const qcf = isSubsequence(tokens, QCF);
-    const doubleQcf = isSubsequence(tokens, QCF2);
-    const attack = this.tappedAny(keys.light) || this.tappedAny(keys.heavy) || this.tappedAny(keys.kick);
+    const tappedLight = this.tappedAny(keys.light);
+    const tappedHeavy = this.tappedAny(keys.heavy);
+    const tappedKick = this.tappedAny(keys.kick);
+    const tappedU = this.tappedAny(keys.u);
+    const taps = this.press[id];
 
-    if (attack) {
-      if (doubleQcf) {
+    if (tappedLight && tappedHeavy) {
+      input.tech = true;
+      input.throw = true;
+      this.techFrame[id] = this.frame;
+      taps.light = -99;
+      taps.heavy = -99;
+      return input;
+    }
+    if (tappedLight) taps.light = this.frame;
+    if (tappedHeavy) taps.heavy = this.frame;
+    if (tappedKick) taps.kick = this.frame;
+    if (this.frame - this.techFrame[id] <= THROW_TECH_WINDOW) input.tech = true;
+
+    // Double-tap dash (absolute direction; the fighter resolves forward/back).
+    const tap = this.tap[id];
+    if (this.tappedAny(keys.right)) {
+      if (this.frame - tap.right <= 12) input.dashRight = true;
+      tap.right = this.frame;
+      tap.left = -99;
+    } else if (this.tappedAny(keys.left)) {
+      if (this.frame - tap.left <= 12) input.dashLeft = true;
+      tap.left = this.frame;
+      tap.right = -99;
+    }
+
+    const tokens = this.sampleMotion(id);
+    const tappedAttack = tappedLight || tappedHeavy || tappedKick;
+    input.u = tappedU;
+
+    if (tappedAttack) {
+      if (isSubsequence(tokens, QCF2)) {
         input.super = true;
         this.buffer[id] = [];
-      } else if (qcf) {
-        input.special = true;
+      } else if (isSubsequence(tokens, DP)) {
+        input.dp = true;
         this.buffer[id] = [];
-      } else {
-        input.light = this.tappedAny(keys.light);
-        input.heavy = this.tappedAny(keys.heavy);
-        input.kick = this.tappedAny(keys.kick);
+      } else if (isSubsequence(tokens, QCF)) {
+        input.special = true;
+        input.ex = tappedHeavy;
+        this.buffer[id] = [];
       }
     }
 
+    if (input.super || input.dp || input.special) return input;
+
+    // Buffered buttons stay live for a few frames so presses during recovery
+    // are not lost, without repeating an action after a move ends.
+    input.light = this.frame - taps.light <= INPUT_BUFFER;
+    input.heavy = this.frame - taps.heavy <= INPUT_BUFFER;
+    input.kick = this.frame - taps.kick <= INPUT_BUFFER;
     return input;
   }
 
